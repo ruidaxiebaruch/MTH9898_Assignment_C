@@ -9,15 +9,15 @@ import math
 import random as rd
 import pandas.io.data as web
 from pyspark.mllib.regression import LabeledPoint, LinearRegressionWithSGD, LinearRegressionModel
-from pyspark import SparkConf, SparkContext
+from pyspark import SparkConf, SparkContext # to use existing code from SDK
 from pyspark.sql import SQLContext
 from datetime import datetime
 
 APP_NAME = "My Spark Application"
 
 def getCompanyID(strs):
+    # dictionary of a couple of companies chosen from S&P 500
     companyDict = {'TripAdvisor':"0", 'AFLAC':"1"}
-
     res = [];
     sCol = strs.split(" ")
     for s in sCol:
@@ -26,6 +26,7 @@ def getCompanyID(strs):
     return res;
 
 def stringDate(x):
+    # dictionary to connect text months with numeric months
     month = {"Jan":"01", "Feb":"02", "Mar":"03", "Apr":"04", "May":"05", "Jun":"06", "Jul":"07", "Aug":"08",
             "Sep":"09", "Oct":"10", "Nov":"11", "Dec":"12"}
     xSplit = x.split(" ")
@@ -44,9 +45,9 @@ def maps(x):
     return res
 
 if __name__ == "__main__":
-    Conf = SparkConf().setAppName(APP_NAME)
-    Conf = Conf.setMaster("local[*]")
-    sc = SparkContext(Conf = Conf)
+    conf = SparkConf().setAppName(APP_NAME)
+    conf = conf.setMaster("local[*]")
+    sc = SparkContext(conf = conf)
     sqlContext = SQLContext(sc)
     dataFile = sqlContext.read.json("tweets/*.tar.gz")
     dataFile = dataFile.filter(dataFile["lang"].like('%en%'))
@@ -56,13 +57,14 @@ if __name__ == "__main__":
     rdd1.saveAsTextFile("tweet4")
 
 syms = ['TRIP', 'AFL']
+# start/end dates chosen to incorporate the entire year of 2013
 start = datetime(2012,12,31)
 end = datetime(2014,1,1)
 stockRaw = web.DataReader(syms, 'yahoo', start, end)
 sliceKey = 'Adj Close'
 adjClose = stockRaw.ix[sliceKey]
 adjClose = adjClose.shift(1) / adjClose - 1
-adjClose.to_csv("stockreturn.txt")
+adjClose.to_csv("stockReturn.txt")
 
 APP_NAME = "My Spark Application"
 def mapp(x):
@@ -78,21 +80,18 @@ def mapp(x):
 if __name__=="__main__":
     conf = SparkConf().setAppName(APP_NAME)
     conf = conf.setMaster("local[*]")
-    sc = SparkContext(conf=conf)
-    df = sc.textFile("tweets/*.txt")
-    parts = df.map(lambda x: (x.split(",")[0], ",".join(x.split(",")[1:])))
-    df2=sc.textFile("tweet4")
-    part2=df2.map(lambda l: ((l.split("\t")[0],"\t".join(l.split("\t")[1:]))))
-    part3=part2.join(parts)
-    part4=part3.map(mapp)
+    sc = SparkContext(conf = conf)
+    dataFile = sc.textFile("tweets/*.txt")
+    parts = dataFile.map(lambda x: (x.split(",")[0], ",".join(x.split(",")[1:])))
+    dataFile2 = sc.textFile("tweet4")
+    part2 = dataFile2.map(lambda l: ((l.split("\t")[0],"\t".join(l.split("\t")[1:]))))
+    part3 = part2.join(parts)
+    part4 = part3.map(mapp)
     part4.saveAsTextFile("tweet5")
-
 # number of stocks under consideration
 nStocks = 2
-
 # dictionary of sentimental words
 sentimentDict = {}
-
 # extract word
 def obtainFeat(content):
     def work(content, dict):
@@ -114,12 +113,10 @@ def obtainFeat(content):
             ret = " ".join([str(x) for x in res])
         return str(retValue) + " " + ret
     return work(content, sentimentDict)
-
-
 if __name__=="__main__":
     conf = SparkConf().setAppName(APP_NAME)
     conf = conf.setMaster("local[*]")
-    sc = SparkContext(conf=conf)
+    sc = SparkContext(conf = conf)
     tweetData = sc.textFile("intermFile2");
     
     sentimentDictSource = sc.textFile("DictionaryX");
@@ -131,8 +128,6 @@ if __name__=="__main__":
     res.saveAsTextFile("intermFile3")
 
 APP_NAME2 = "sentiment_regression"
-#stock number
-stock_cnt = 9
 
 # parse the data by blanks
 def parseBlank(ss):
@@ -143,17 +138,14 @@ def parseBlank(ss):
 if __name__ == "__main__":
     conf = SparkConf().setAppName(APP_NAME2)
     conf = conf.setMaster("local[*]")
-    sc = SparkContext(conf=conf)
-    
+    sc = SparkContext(conf = conf)
     data = sc.textFile("intermFile3")
     training = data.map(parseBlank)
-    
     # compute the simple regression
-    model = LinearRegressionWithSGD.train(training,100,0.1)
-    
+    model = LinearRegressionWithSGD.train(training, 100, 0.1)
     # Evaluate the model on training data
-    valuesAndPreds = training.map(lambda p: (p.label, model.predict(p.features)))
-    train_res = valuesAndPreds.map(lambda (v, p) : ((v - p) * (v - p))).reduce(lambda x, y: x + y) / valuesAndPreds.count()
-    train_res.saveAsTextFile("intermFile4")
+    valuesAndPredictions = training.map(lambda p: (p.label, model.predict(p.features)))
+    trainRet = valuesAndPredictions.map(lambda (v, p) : ((v - p) * (v - p))).reduce(lambda x, y: x + y) / valuesAndPredictions.count()
+    trainRet.saveAsTextFile("intermFile4")
 
 
